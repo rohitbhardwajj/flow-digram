@@ -1,0 +1,850 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Plumedica UAT · Architecture + CI/CD Flow</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🚀%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#f2f5fb; --surface:#ffffff; --surface2:#eaf0f9; --ink:#0e1a33; --ink2:#51627f; --line:#d3dcea; --edge:#b4c1d6;
+  --code:#ea7a0c; --ci:#0891d1; --cd:#7c3aed; --ok:#12a150; --vpn:#0d9488; --bad:#e11d48; --app:#2563eb; --be:#d97706; --sonar:#4f46e5; --gray:#64748b;
+  --shadow:0 10px 30px rgba(20,40,90,.10);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0a1020; --surface:#121b31; --surface2:#18243f; --ink:#e9efff; --ink2:#9fb1d1; --line:#2a3b5f; --edge:#41567f;
+    --code:#fb9f3a; --ci:#38bdf8; --cd:#a78bfa; --ok:#34d399; --vpn:#2dd4bf; --bad:#fb7185; --app:#60a5fa; --be:#fbbf24; --sonar:#818cf8; --gray:#94a3b8;
+    --shadow:0 10px 30px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0a1020; --surface:#121b31; --surface2:#18243f; --ink:#e9efff; --ink2:#9fb1d1; --line:#2a3b5f; --edge:#41567f;
+  --code:#fb9f3a; --ci:#38bdf8; --cd:#a78bfa; --ok:#34d399; --vpn:#2dd4bf; --bad:#fb7185; --app:#60a5fa; --be:#fbbf24; --sonar:#818cf8; --gray:#94a3b8;
+  --shadow:0 10px 30px rgba(0,0,0,.4);
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",sans-serif;-webkit-font-smoothing:antialiased}
+.app{max-width:1560px;margin:0 auto;padding:16px 16px 40px}
+
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;margin-bottom:14px}
+h1{margin:0;font-size:clamp(18px,2.4vw,26px);font-weight:800;letter-spacing:-.01em}
+h1 small{display:block;font-size:13px;font-weight:500;color:var(--ink2);letter-spacing:0;margin-top:2px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-left:auto;font-size:13px;color:var(--ink2);align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:11px;height:11px;border-radius:50%;background:var(--k)}
+.k-code{--k:var(--code)} .k-ci{--k:var(--ci)} .k-cd{--k:var(--cd)} .k-ok{--k:var(--ok)} .k-vpn{--k:var(--vpn)} .k-bad{--k:var(--bad)}
+.k-app{--k:var(--app)} .k-be{--k:var(--be)} .k-sonar{--k:var(--sonar)} .k-gray{--k:var(--gray)}
+.iconbtn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:6px 10px;font:inherit;font-size:14px;cursor:pointer}
+
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+svg#svg{display:block;width:100%;height:auto}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",sans-serif}
+
+/* zones */
+.zone .zn{fill:color-mix(in srgb,var(--zk) 7%,var(--surface));stroke:color-mix(in srgb,var(--zk) 55%,transparent);stroke-width:2}
+.z-gh{--zk:var(--gray)} .z-ci{--zk:var(--ci)} .z-cd{--zk:var(--cd)} .z-az{--zk:var(--app)} .z-pub{--zk:var(--ok)} .z-priv{--zk:var(--gray)} .z-vm{--zk:var(--vpn)} .z-net{--zk:var(--app)}
+.z-priv .zn{stroke-dasharray:7 6}
+.zone .zt{fill:color-mix(in srgb,var(--zk) 65%,var(--ink));font-size:13px;font-weight:800;letter-spacing:.03em}
+.zone .zs{fill:var(--ink2);font-size:12px}
+.zone.zp .zn{animation:zp 1.5s ease-in-out 2}
+@keyframes zp{50%{stroke-width:5;stroke:var(--zk);filter:drop-shadow(0 0 10px var(--zk))}}
+
+/* edges */
+path.edge{fill:none;stroke:var(--edge);stroke-width:2;stroke-dasharray:2 6;stroke-linecap:round;opacity:.9}
+
+/* nodes */
+.node{transition:opacity .6s ease,filter .6s ease}
+.node .bx{fill:color-mix(in srgb,var(--k) 15%,var(--surface));stroke:var(--k);stroke-width:2.2;transition:stroke-width .4s}
+.node text.t{fill:var(--ink);font-size:14.5px;font-weight:800;text-anchor:middle}
+.node text.s{fill:var(--ink2);font-size:12px;text-anchor:middle}
+.node.compact text.t{font-size:13px;text-anchor:start}
+.node.compact text.s{font-size:10.5px;text-anchor:start}
+.node.dim{opacity:.34}
+.node.on{filter:drop-shadow(0 0 9px color-mix(in srgb,var(--k) 75%,transparent))}
+.node.on .bx{stroke-width:3.6}
+.node text.big{font-size:34px;text-anchor:middle}
+
+/* teams card */
+.tidle{transition:opacity .4s}
+.tidle.hide{opacity:0}
+.tcard{opacity:0;transform:scale(.8);transform-box:fill-box;transform-origin:center;transition:opacity .35s ease,transform .55s cubic-bezier(.2,1.5,.4,1)}
+.tcard.show{opacity:1;transform:scale(1)}
+.tcard .cbg{fill:var(--surface);stroke:var(--line);stroke-width:1.5}
+.tcard .cbar{fill:var(--cc,var(--ok))}
+.tcard text{fill:var(--ink);font-size:10.5px}
+.tcard text.h{font-size:12.5px;font-weight:800}
+.tcard text.m{fill:var(--ink2)}
+.tcard .bt{fill:color-mix(in srgb,var(--sonar) 16%,var(--surface));stroke:var(--sonar);stroke-width:1}
+.tcard text.bl{font-size:9.5px;font-weight:700;text-anchor:middle}
+
+/* chip */
+#chip{transition:opacity .4s ease,transform .5s cubic-bezier(.2,1.4,.4,1);transform-box:fill-box;transform-origin:center}
+#chip.hide{opacity:0;transform:scale(.85)}
+#chip rect{fill:var(--surface);stroke:var(--k);stroke-width:2}
+#chip text{fill:var(--ink);font-size:12.5px;font-weight:800;text-anchor:middle}
+
+/* flows */
+.flow{transition:opacity .45s ease}
+.fl{fill:none;stroke:var(--k);stroke-width:4.5;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 4px color-mix(in srgb,var(--k) 55%,transparent))}
+.pk{fill:var(--k);stroke:var(--surface);stroke-width:2.5}
+.ph{fill:var(--k);opacity:.28;transform-box:fill-box;transform-origin:center;animation:halo .9s ease-in-out infinite alternate}
+@keyframes halo{from{transform:scale(.75)}to{transform:scale(1.25)}}
+.ar{fill:var(--k);transition:opacity .3s}
+.lb{opacity:0;transition:opacity .35s}
+.lb.v{opacity:1}
+.lb rect{fill:var(--surface);stroke:var(--k);stroke-width:1.8}
+.lb text{fill:var(--ink);font-size:12px;font-weight:700;text-anchor:middle}
+
+/* fx */
+.badge{animation:pop .5s cubic-bezier(.2,1.5,.4,1) both;transform-box:fill-box}
+@keyframes pop{from{opacity:0;transform:translateY(6px) scale(.7)}to{opacity:1;transform:none}}
+.badge rect{fill:var(--surface);stroke:var(--k);stroke-width:2}
+.badge text{fill:var(--ink);font-size:11.5px;font-weight:800;text-anchor:middle}
+.rip{fill:none;stroke:var(--k);stroke-width:3;opacity:0;transform-box:fill-box;transform-origin:center;animation:rip 1.7s ease-out infinite}
+@keyframes rip{0%{transform:scale(1);opacity:.85}100%{transform:scale(var(--sx,1.12),var(--sy,1.2));opacity:0}}
+.xmark{animation:shake .5s ease 2,pop .4s both}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.xmark circle{fill:var(--bad);stroke:var(--surface);stroke-width:3}
+.xmark path{stroke:#fff;stroke-width:4;stroke-linecap:round}
+svg.paused *{animation-play-state:paused !important}
+
+/* controls */
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:14px 0 8px}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:9px 16px;font:inherit;font-weight:700;cursor:pointer;transition:transform .12s,background .2s}
+.btn:hover{background:var(--surface2)}
+.btn:active{transform:scale(.96)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink);min-width:116px}
+.btn:focus-visible,.iconbtn:focus-visible,.seg:focus-visible,select:focus-visible{outline:3px solid var(--ci);outline-offset:2px}
+select{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:9px 10px;font:inherit}
+.count{margin-left:auto;color:var(--ink2);font-weight:700;font-size:14px}
+.hint{font-size:12.5px;color:var(--ink2);width:100%}
+.segs{display:flex;gap:3px;margin:6px 0 16px}
+.seg{flex:1;height:10px;border:0;padding:0;border-radius:5px;background:var(--line);cursor:pointer;transition:transform .2s,background .3s}
+.seg.past{background:color-mix(in srgb,var(--pc) 70%,var(--line))}
+.seg.cur{background:linear-gradient(to right,var(--pc) var(--pf,0%),var(--line) var(--pf,0%));transform:scaleY(1.7)}
+.seg:hover{transform:scaleY(1.7)}
+
+/* panel */
+.panel{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.panel{grid-template-columns:1fr}.legend{margin-left:0}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}
+.cap{padding:20px 24px 22px;border-left:8px solid var(--pc)}
+.pill{display:inline-block;background:color-mix(in srgb,var(--pc) 16%,var(--surface));color:color-mix(in srgb,var(--pc) 70%,var(--ink));border:1px solid color-mix(in srgb,var(--pc) 50%,transparent);border-radius:99px;padding:3px 12px;font-size:12.5px;font-weight:800}
+.cap h2{margin:10px 0 8px;font-size:clamp(20px,2.4vw,27px);line-height:1.25;letter-spacing:-.01em}
+.cap ul{margin:0;padding:0;list-style:none;display:grid;gap:10px}
+.cap li{position:relative;padding-left:26px;font-size:16.5px;max-width:78ch;animation:rise .7s cubic-bezier(.2,.8,.2,1) both}
+.cap li::before{content:"";position:absolute;left:2px;top:.55em;width:11px;height:11px;border-radius:50%;background:var(--pc)}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;background:color-mix(in srgb,var(--pc,var(--ci)) 13%,var(--surface));border-radius:6px;padding:1px 6px}
+
+.side{padding:16px 18px}
+.side h3{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px}
+.side h3 i{width:11px;height:11px;border-radius:50%;background:var(--k)}
+.ck{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.ck li{display:flex;gap:10px;align-items:flex-start;padding:7px 10px;border-radius:10px;transition:background .3s}
+.ck li.job{padding:9px 10px 2px;font-size:11.5px;font-weight:800;color:var(--ink2);letter-spacing:.02em}
+.ck li.job:first-child{padding-top:0}
+.ck b{display:block;font-size:14px}
+.ck small{display:block;color:var(--ink2);font-size:12.5px;line-height:1.35}
+.st{flex:none;width:20px;height:20px;border-radius:50%;border:2px solid var(--line);margin-top:1px;display:grid;place-items:center;font-size:12px;font-weight:900;color:#fff;transition:all .3s}
+.ck li.run{background:color-mix(in srgb,var(--k) 12%,var(--surface))}
+.ck li.run .st{border-color:var(--k);border-top-color:transparent;animation:spin .8s linear infinite}
+.ck li.done .st{background:var(--ok);border-color:var(--ok)}
+.ck li.done .st::before{content:"✓"}
+.ck li.fail{background:color-mix(in srgb,var(--bad) 12%,var(--surface))}
+.ck li.fail .st{background:var(--bad);border-color:var(--bad)}
+.ck li.fail .st::before{content:"✕"}
+@keyframes spin{to{transform:rotate(360deg)}}
+.facts{display:grid;gap:0;margin:0}
+.facts div{display:grid;grid-template-columns:minmax(80px,.55fr) 1fr;gap:10px;padding:8px 2px;border-bottom:1px dashed var(--line);font-size:14px}
+.facts div:last-child{border-bottom:0}
+.facts dt{color:var(--ink2);font-weight:700}
+.facts dd{margin:0;font-weight:600}
+[hidden]{display:none !important}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Plumedica UAT · Architecture + CI/CD Flow<small>Developer ke code push se lekar UAT live hone tak, step by step</small></h1>
+    <div class="legend" aria-label="Colour guide">
+      <span class="k-code"><i></i>Code / request</span>
+      <span class="k-ci"><i></i>CI</span>
+      <span class="k-cd"><i></i>CD</span>
+      <span class="k-vpn"><i></i>VPN tunnel</span>
+      <span class="k-ok"><i></i>Response / success</span>
+      <span class="k-bad"><i></i>Blocked / failed</span>
+      <button class="iconbtn" id="theme" aria-label="Switch light or dark theme">◐ Theme</button>
+    </div>
+  </header>
+
+  <section class="stage">
+    <svg id="svg" viewBox="0 36 1600 916" role="img" aria-label="Plumedica UAT architecture and CI/CD flow diagram">
+      <g id="gZones"></g>
+      <g id="gEdges"></g>
+      <g id="gNodes"></g>
+      <g id="gFlows"></g>
+      <g id="gFx"></g>
+      <g id="gLabels"></g>
+    </svg>
+  </section>
+
+  <section class="controls" aria-label="Playback controls">
+    <button class="btn" id="prev" aria-label="Previous step">◀ Back</button>
+    <button class="btn primary" id="play">⏸ Pause</button>
+    <button class="btn" id="next" aria-label="Next step">Next ▶</button>
+    <button class="btn" id="restart" aria-label="Restart from the first step">↻ Restart</button>
+    <label>Speed <select id="speed"><option value="0.6">0.6×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
+    <span class="count" id="count"></span>
+    <div class="hint">Space = play/pause · ← → = step · neeche ki patti par click karke kisi bhi step par jao</div>
+  </section>
+  <div class="segs" id="segs" role="group" aria-label="Steps"></div>
+
+  <section class="panel">
+    <article class="card cap" id="cap" aria-live="polite">
+      <span class="pill" id="pill"></span>
+      <h2 id="title"></h2>
+      <ul id="bul"></ul>
+    </article>
+    <aside>
+      <div class="card side k-ci" id="cardCi" hidden>
+        <h3><i></i>CI · jobs on Pull Request</h3>
+        <ul class="ck" id="ckCi"></ul>
+      </div>
+      <div class="card side k-cd" id="cardCd" hidden>
+        <h3><i></i>CD · jobs on merge to main</h3>
+        <ul class="ck" id="ckCd"></ul>
+      </div>
+      <div class="card side k-gray" id="cardFacts" hidden>
+        <h3><i></i>Key facts</h3>
+        <dl class="facts" id="facts"></dl>
+      </div>
+    </aside>
+  </section>
+</div>
+
+<script>
+(() => {
+'use strict';
+const NS = 'http://www.w3.org/2000/svg';
+const $ = s => document.querySelector(s);
+const el = (t, a = {}, p) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; };
+const txt = (p, cls, x, y, s) => { const t = el('text', { class: cls, x, y }, p); t.textContent = s; return t; };
+const gZ = $('#gZones'), gE = $('#gEdges'), gN = $('#gNodes'), gF = $('#gFlows'), gX = $('#gFx'), gL = $('#gLabels');
+
+/* ---------- zones ---------- */
+const Z = {};
+function zone(id, x, y, w, h, cls, title, tx, ty) {
+  const g = el('g', { class: 'zone ' + cls }, gZ);
+  el('rect', { class: 'zn', x, y, width: w, height: h, rx: 18 }, g);
+  if (title) txt(g, 'zt', tx, ty, title);
+  Z[id] = g; return g;
+}
+zone('gh', 20, 56, 1560, 290, 'z-gh', 'SOURCE → CI → CD  ·  GitHub + GitHub Actions', 40, 82);
+zone('ci', 590, 84, 310, 110, 'z-ci', 'CI · RUNS ON PULL REQUEST', 604, 186);
+zone('cd', 590, 214, 640, 124, 'z-cd', 'CD · RUNS ON MERGE TO MAIN', 604, 330);
+zone('az', 210, 404, 1210, 540, 'z-az', 'Microsoft Azure · VNet', 700, 428);
+zone('pub', 230, 440, 930, 490, 'z-pub', 'Public Subnet', 250, 462);
+const priv = zone('priv', 1180, 440, 220, 490, 'z-priv', 'Private Subnet', 1195, 462);
+txt(priv, 'zs', 1195, 481, '(no resources yet)'); priv.lastChild.setAttribute('text-anchor', 'start');
+zone('vm', 250, 480, 890, 430, 'z-vm', 'Azure VM · Plumedica-uat-server · Static Public IP · Ubuntu', 270, 898);
+zone('net', 800, 500, 320, 395, 'z-net', 'Docker network: plumedica_network', 816, 520);
+
+/* ---------- nodes ---------- */
+const N = {}, NODES = {};
+function addNode(id, x, y, w, h, cat, icon, title, subs = []) {
+  const g = el('g', { class: 'node k-' + cat, id: 'n-' + id, transform: `translate(${x},${y})` }, gN);
+  el('rect', { class: 'bx', width: w, height: h, rx: 14 }, g);
+  const ch = 22 + subs.length * 16, y0 = (h - ch) / 2 + 16;
+  txt(g, 't', w / 2, y0, (icon ? icon + ' ' : '') + title);
+  subs.forEach((s, i) => txt(g, 's', w / 2, y0 + 21 + i * 16, s));
+  N[id] = { x, y, w, h }; NODES[id] = g; return g;
+}
+function addCompact(id, y, cat, title, sub) {
+  const x = 820, w = 280, h = 40;
+  const g = el('g', { class: 'node compact k-' + cat, id: 'n-' + id, transform: `translate(${x},${y})` }, gN);
+  el('rect', { class: 'bx', width: w, height: h, rx: 10 }, g);
+  txt(g, 't', 14, 17, title); txt(g, 's', 14, 32, sub);
+  N[id] = { x, y, w, h, cy: y + 20 }; NODES[id] = g;
+}
+addNode('dev', 50, 116, 180, 92, 'code', '💻', 'Developer', ['laptop · git push', 'WireGuard client']);
+addNode('repo', 300, 116, 210, 92, 'code', '🐙', 'GitHub Repo', ['feature branch → PR', '→ main']);
+addNode('ci', 610, 96, 270, 76, 'ci', '⚙️', 'CI  (PR → main)', ['1 Lint+Build · 2 SonarQube', '3 Trivy · 4 Teams notify']);
+addNode('cd', 610, 222, 270, 76, 'cd', '🚀', 'CD  (push to main)', ['1 Docker build+push · 2 SSH deploy', '3 Teams notify']);
+addNode('ghcr', 1010, 222, 180, 76, 'gray', '📦', 'GHCR', ['ghcr.io registry', 'tags: latest + sha']);
+
+/* Teams node with an alert card */
+let TC = {};
+(() => {
+  const x = 1330, y = 96, w = 230, h = 200; N.teams = { x, y, w, h };
+  const g = el('g', { class: 'node k-sonar', id: 'n-teams', transform: `translate(${x},${y})` }, gN); NODES.teams = g;
+  el('rect', { class: 'bx', width: w, height: h, rx: 14 }, g);
+  txt(g, 't', w / 2, 28, '💬 Microsoft Teams'); txt(g, 's', w / 2, 46, 'webhook alerts · CI / CD result');
+  const idle = el('g', { class: 'tidle' }, g); TC.idle = idle;
+  txt(idle, 'big', w / 2, 128, '🔔'); txt(idle, 's', w / 2, 160, 'alert ka wait…');
+  const pos = el('g', { transform: 'translate(12,58)' }, g);
+  const card = el('g', { class: 'tcard' }, pos); TC.card = card;
+  el('rect', { class: 'cbg', width: 206, height: 132, rx: 10 }, card);
+  TC.bar = el('rect', { class: 'cbar', width: 7, height: 132, rx: 3 }, card);
+  TC.h = txt(card, 'h', 18, 22, ''); TC.l1 = txt(card, 'm', 18, 41, ''); TC.l2 = txt(card, 'm', 18, 56, ''); TC.l3 = txt(card, 'm', 18, 71, '');
+  TC.st = txt(card, 'h', 18, 93, ''); TC.st.style.fontSize = '11px';
+  TC.btn = [0, 1, 2].map(i => {
+    const bx = 18 + i * 62; const r = el('rect', { class: 'bt', x: bx, y: 102, width: 58, height: 22, rx: 6 }, card);
+    const t = txt(card, 'bl', bx + 29, 117, ''); return { r, t };
+  });
+})();
+function setTeams(kind) {
+  const ci = kind.startsWith('ci'), pass = kind.endsWith('pass');
+  TC.card.style.setProperty('--cc', pass ? 'var(--ok)' : 'var(--bad)');
+  TC.h.textContent = ci ? (pass ? '✅ PASSED · CI Pipeline' : '❌ FAILED · CI Pipeline') : '✅ DEPLOYMENT SUCCESSFUL';
+  TC.l1.textContent = 'Repo: plumedica-backend';
+  TC.l2.textContent = ci ? 'Branch: feature/login' : 'Branch: main';
+  TC.l3.textContent = ci ? 'Run #42 · Actor: dev' : 'Run #43 · Commit a1b2c3d';
+  TC.st.textContent = ci ? (pass ? 'Build ✓   Sonar ✓   Trivy ✓' : 'Build ✓   Sonar ✓   Trivy ✗') : 'Docker Build ✓   Deploy ✓';
+  const labels = ci ? ['View Run', 'View PR', 'Commit'] : ['View Run', 'Commit', ''];
+  TC.btn.forEach((b, i) => { b.t.textContent = labels[i]; b.r.style.display = labels[i] ? '' : 'none'; });
+  TC.card.classList.add('show'); TC.idle.classList.add('hide');
+}
+
+addNode('ng', 520, 615, 220, 160, 'ok', '🛡️', 'NGINX 1.28', [':80 → 301 → :443', 'TLS 1.2/1.3 · HTTP/2', 'allow 10.10.10.0/24', 'deny all · 403 → 444 (drop)', '/sonar open']);
+addNode('eng', 275, 515, 190, 66, 'ok', '🐳', 'Docker + sshd', ['Docker Engine · deploy target']);
+addNode('wg', 275, 650, 190, 66, 'vpn', '🔐', 'WireGuard VPN', ['10.10.10.0/24 · devs']);
+addNode('disk', 275, 800, 190, 60, 'gray', '💾', 'Managed Data Disk', ['attached to VM']);
+addNode('inet', 20, 740, 170, 70, 'bad', '🌍', 'Public Internet', ['no VPN (unknown IP)']);
+addNode('le', 20, 840, 170, 70, 'code', '🔒', "Let's Encrypt", ['SSL cert · auto-renew']);
+addNode('atlas', 1430, 659, 150, 90, 'ok', '', 'MongoDB Atlas', ['🍃 managed DB', '(cloud)']);
+addCompact('c_site', 540, 'app', 'plumedicahealthcare-website', '/  ·  :80');
+addCompact('c_web', 588, 'app', 'plumedica-web', '/web/  ·  Flutter web :80');
+addCompact('c_admin', 636, 'app', 'plumedica-adminpanel', '/admin/  ·  :80');
+addCompact('c_be', 684, 'be', 'plumedica-backend', '/api  ·  Node API :5000');
+addCompact('c_sonar', 732, 'sonar', 'sonarqube', '/sonar/  ·  :9000');
+addCompact('c_pg', 780, 'sonar', 'sonar-postgres', 'internal DB for Sonar  ·  :5432');
+addCompact('c_dozzle', 828, 'gray', 'dozzle', '/logs/  ·  log viewer :8080');
+
+/* PR / branch chip */
+const chip = el('g', { id: 'chip', class: 'hide k-code', transform: 'translate(285,222)' }, gX);
+el('rect', { width: 245, height: 30, rx: 15 }, chip);
+const chipT = txt(chip, '', 122, 20, '');
+
+/* ---------- edges ---------- */
+const E = {
+  dev_repo: [[230, 162], [300, 162]],
+  repo_ci: [[510, 150], [550, 150], [550, 134], [610, 134]],
+  repo_cd: [[510, 176], [550, 176], [550, 260], [610, 260]],
+  ci_ng: [[880, 152], [905, 152], [905, 384], [640, 384], [640, 615]],
+  ci_teams: [[880, 120], [1330, 120]],
+  cd_teams: [[860, 222], [860, 204], [1290, 204], [1290, 240], [1330, 240]],
+  cd_ghcr: [[880, 260], [1010, 260]],
+  cd_ssh: [[700, 298], [700, 358], [420, 358], [420, 515]],
+  ghcr_pull: [[1100, 298], [1100, 371], [450, 371], [450, 515]],
+  dev_wg: [[140, 208], [140, 683], [275, 683]],
+  wg_ng: [[465, 683], [520, 683]],
+  inet_ng: [[190, 775], [495, 775], [495, 740], [520, 740]],
+  le_ng: [[190, 875], [630, 875], [630, 775]],
+  eng_ng: [[465, 548], [600, 548], [600, 615]],
+  eng_be: [[465, 528], [790, 528], [790, 704], [820, 704]],
+  be_atlas: [[1100, 704], [1430, 704]],
+  sonar_pg: [[1100, 752], [1114, 752], [1114, 800], [1100, 800]]
+};
+['c_site', 'c_web', 'c_admin', 'c_be', 'c_sonar', 'c_pg', 'c_dozzle'].forEach(id => {
+  if (id === 'c_pg') return;
+  E['ng_' + id] = [[740, 695], [770, 695], [770, N[id].cy], [820, N[id].cy]];
+});
+function rp(pts, r = 14) {
+  let d = `M${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
+    const l1 = Math.hypot(x1 - x0, y1 - y0), l2 = Math.hypot(x2 - x1, y2 - y1), rr = Math.min(r, l1 / 2, l2 / 2);
+    d += ` L${x1 - (x1 - x0) / l1 * rr} ${y1 - (y1 - y0) / l1 * rr} Q${x1} ${y1} ${x1 + (x2 - x1) / l2 * rr} ${y1 + (y2 - y1) / l2 * rr}`;
+  }
+  const p = pts[pts.length - 1]; return d + ` L${p[0]} ${p[1]}`;
+}
+Object.values(E).forEach(p => el('path', { class: 'edge', d: rp(p) }, gE));
+
+/* ---------- checklists ---------- */
+const CK = {
+  ci: [
+    ['Job 01 · Backend Validation'],
+    ['Checkout source code', 'PR ka code runner par aata hai'],
+    ['Setup Node.js 22 + npm cache', 'Node install, packages ka cache restore'],
+    ['npm ci', 'package-lock ke exact versions install'],
+    ['ESLint  (npm run lint)', 'code style + common bugs check'],
+    ['Build  (npm run build)', 'app compile hoti hai ya nahi'],
+    ['Job 02 · SonarQube Analysis'],
+    ['SonarQube scan', 'bugs, vulnerabilities, code smells'],
+    ['Job 03 · Trivy Security Scan'],
+    ['Trivy filesystem scan', 'HIGH / CRITICAL mila → CI fail'],
+    ['Job 04 · Teams Notification'],
+    ['Send alert to Teams', '✅ / ❌ Adaptive Card webhook se']
+  ],
+  cd: [
+    ['Job 01 · Build & Push Docker Image'],
+    ['Checkout source code', 'main ka latest code'],
+    ['Login to GHCR', 'GHCR_USERNAME + GHCR_TOKEN secrets'],
+    ['Docker metadata', 'tags: latest + sha'],
+    ['Build & push image', 'Dockerfile → ghcr.io registry'],
+    ['Job 02 · Deploy Backend To UAT'],
+    ['SSH into UAT server', 'static IP · key from secrets'],
+    ['docker pull :latest', 'naya image server par'],
+    ['Stop & remove old container', 'docker stop + docker rm'],
+    ['Run new container', 'network + env-file + restart policy'],
+    ['Health check (8 retries)', 'nginx se backend :5000 call'],
+    ['Job 03 · Teams Notification'],
+    ['Send alert to Teams', '✅ SUCCESSFUL / ❌ FAILED']
+  ]
+};
+const ckIdx = { ci: [], cd: [] }, ckState = { ci: [], cd: [] }, ckLi = { ci: [], cd: [] };
+['ci', 'cd'].forEach(k => {
+  const ul = $(k === 'ci' ? '#ckCi' : '#ckCd');
+  CK[k].forEach(row => {
+    const li = document.createElement('li');
+    if (row.length === 1) { li.className = 'job'; li.textContent = row[0]; ul.appendChild(li); return; }
+    li.innerHTML = '<span class="st"></span><div><b></b><small></small></div>';
+    li.querySelector('b').textContent = row[0]; li.querySelector('small').textContent = row[1];
+    ul.appendChild(li); ckLi[k].push(li); ckState[k].push('pend');
+  });
+});
+function paintCk(k) { ckLi[k].forEach((li, i) => { li.className = ckState[k][i] === 'pend' ? '' : ckState[k][i]; }); }
+function ckReset() { ['ci', 'cd'].forEach(k => { ckState[k].fill('pend'); paintCk(k); }); }
+function applyCk(e) { if (e.i === 'all') ckState[e.l].fill(e.s); else ckState[e.l][e.i] = e.s; paintCk(e.l); }
+
+/* ---------- steps ---------- */
+const F = (e, c, l, at, d, o = {}) => ({ e, c, l, at, d, ...o });
+const CKE = (l, i, s, at) => ({ l, i, s, at });
+const BG = (at, n, t, c, o = {}) => ({ k: 'badge', at, n, t, c, ...o });
+const RP = (at, n, c, rep = 3) => ({ k: 'ripple', at, n, c, rep });
+const ZP = (z, at) => ({ k: 'zone', z, at });
+const TM = (at, kind) => ({ k: 'teams', at, kind });
+
+const PH = {
+  ov: ['OVERVIEW', '--gray'], dev: ['DEVELOP', '--code'], ci: ['CI · PULL REQUEST', '--ci'], mg: ['MERGE', '--ok'],
+  cd: ['CD · MERGE TO MAIN', '--cd'], rt: ['RUNTIME · ACCESS & SECURITY', '--vpn'], rc: ['RECAP', '--gray']
+};
+const S = [
+{ ph: 'ov', t: 'Poora UAT setup ek nazar me', n: 'all', dur: 12500,
+  b: ['Code **GitHub** par rehta hai. Har Pull Request par **CI** chalti hai, aur main me merge hote hi **CD** chalti hai. Dono GitHub Actions se.',
+      'Deploy hota hai **Azure** ke ek VM par (Public Subnet, Static IP, Managed Disk). VM ke andar saari apps Docker containers me chalti hain.',
+      'Saara traffic **NGINX** se guzarta hai. Sirf **WireGuard VPN** wale developers (10.10.10.0/24) andar aa sakte hain. Database **MongoDB Atlas** (cloud) me hai.',
+      'Play dabao: ek developer ke code push se lekar live deploy tak poora safar dekhenge.'],
+  facts: [['Cloud', 'Microsoft Azure · VNet (Public + Private subnet)'], ['Server', '1 Ubuntu VM · Static Public IP · Managed Disk'], ['Apps', '7 Docker containers behind NGINX'], ['Database', 'MongoDB Atlas (managed, cloud)'], ['Access', 'WireGuard VPN · 10.10.10.0/24 only']],
+  fx: [ZP('gh', 700), ZP('az', 3000), ZP('vm', 5000), ZP('net', 6600)] },
+
+{ ph: 'dev', t: 'Developer feature branch par code push karta hai', n: ['dev', 'repo'], dur: 9500,
+  b: ['Developer apne laptop par **feature (child) branch** me code likhta hai, jaise `feature/login`, aur `git push` karta hai.',
+      'Code GitHub repo ki usi feature branch me save ho jaata hai. **main branch ko abhi koi chhuta nahi.**',
+      'Rule: kaam hamesha feature branch par hota hai. main me code sirf Pull Request ke through jaata hai, isse main hamesha stable rehta hai.'],
+  facts: [['Branch type', 'feature / child branch'], ['Protected', 'main (sirf PR se)'], ['Command', 'git push origin feature/login']],
+  chip: ['🌿 feature/login · pushed', 'code'],
+  flows: [F('dev_repo', 'code', 'git push', 500, 1600, { pos: [265, 146] })],
+  fx: [BG(2300, 'repo', 'saved ✓', 'ok')] },
+
+{ ph: 'dev', t: 'Developer Pull Request banata hai (feature → main)', n: ['dev', 'repo'], dur: 10000,
+  b: ['GitHub par developer **New Pull Request** banata hai: source = feature branch, target = **main**.',
+      'PR ka matlab: "meri changes main me daalne ki request". Team iska review kar sakti hai.',
+      'PR open hote hi (ya PR me naya commit push hote hi) GitHub ek `pull_request` event fire karta hai. Yehi **CI ko trigger** karega.'],
+  facts: [['From', 'feature/login'], ['Into', 'main'], ['Triggers', 'CI (pull_request event)']],
+  chip: ['🔀 PR #42 · feature/login → main', 'code'],
+  flows: [F('dev_repo', 'code', 'Open PR', 500, 1500, { pos: [265, 146] })],
+  fx: [RP(2100, 'repo', 'code', 3)] },
+
+{ ph: 'ci', t: 'CI trigger hoti hai: naya runner start', n: ['repo', 'ci'], dur: 10500,
+  b: ['Event aate hi workflow `ci` start hota hai (`on: pull_request` → `branches: main`).',
+      'GitHub ek **naya, saaf Ubuntu runner** (virtual machine) deta hai. Har run bilkul fresh environment me hota hai.',
+      '**Concurrency rule:** usi PR par naya push aaya to purani CI run apne aap cancel ho jaati hai (`cancel-in-progress`). Time aur minutes bachte hain.',
+      'Job 1 ka timeout 15 minute hai, hang hone par apne aap ruk jaayega.'],
+  chip: ['🔀 PR #42 · feature/login → main', 'code'],
+  flows: [F('repo_ci', 'ci', 'pull_request event', 400, 1700, { pos: [578, 116] })],
+  fx: [RP(2200, 'ci', 'ci', 3), BG(2500, 'ci', 'runner: ubuntu-latest', 'ci')],
+  ck: [CKE('ci', 'all', 'pend', 0)] },
+
+{ ph: 'ci', t: 'Job 01 · Checkout, Node 22 aur npm ci', n: ['ci'], dur: 9500,
+  b: ['**Checkout:** runner repo ka PR wala code download karta hai (`actions/checkout@v4`).',
+      '**Setup Node.js 22 + npm cache:** Node install hota hai aur npm packages ka cache restore hota hai, taaki install fast ho.',
+      '**`npm ci`:** `package-lock.json` ke bilkul exact versions install karta hai. Har baar same, reproducible dependencies (`npm install` se zyada safe).'],
+  chip: ['🔀 PR #42 · feature/login → main', 'code'],
+  fx: [RP(200, 'ci', 'ci', 5)],
+  ck: [CKE('ci', 0, 'run', 0), CKE('ci', 0, 'done', 1800), CKE('ci', 1, 'run', 1800), CKE('ci', 1, 'done', 3800), CKE('ci', 2, 'run', 3800), CKE('ci', 2, 'done', 6400)] },
+
+{ ph: 'ci', t: 'Job 01 · ESLint aur Build', n: ['ci'], dur: 9500,
+  b: ['`npm run lint` (**ESLint**): code ki style aur common galtiyan (unused variable, kharab pattern) check hoti hain.',
+      '`npm run build`: application compile / build hoti hai. Agar code build hi nahi ho raha to yahin pata chal jaata hai.',
+      'Koi bhi step fail hua to job ❌ ho jaata hai aur aage ki SonarQube / Trivy jobs **skip** ho jaati hain (`needs: build`).'],
+  chip: ['🔀 PR #42 · feature/login → main', 'code'],
+  fx: [RP(200, 'ci', 'ci', 5)],
+  ck: [CKE('ci', 3, 'run', 0), CKE('ci', 3, 'done', 3400), CKE('ci', 4, 'run', 3400), CKE('ci', 4, 'done', 7000)] },
+
+{ ph: 'ci', t: 'Job 02 · SonarQube scan request', n: ['ci', 'ng', 'c_sonar'], dur: 11500,
+  b: ['Runner **full git history** ke saath code checkout karta hai (`fetch-depth: 0`), taaki Sonar "naya code" sahi pehchaan sake.',
+      'Scan action `SONAR_HOST_URL` (https://uat.plumedica.com/sonar) par request bhejti hai, `SONAR_TOKEN` se login karke.',
+      'Ye request **internet se** aati hai (GitHub runner ka IP fixed nahi hota aur VPN me bhi nahi hota). Isliye NGINX me sirf `/sonar/` ko `allow all` rakha hai. Security Sonar ke token + login se hoti hai.'],
+  chip: ['🔀 PR #42 · feature/login → main', 'code'],
+  flows: [F('ci_ng', 'ci', 'scan → /sonar', 500, 3300, { pos: [640, 470] }), F('ng_c_sonar', 'sonar', '', 3900, 1000)],
+  fx: [BG(3600, 'ng', '/sonar → allow all', 'code'), RP(4900, 'c_sonar', 'sonar', 3)],
+  ck: [CKE('ci', 5, 'run', 200)] },
+
+{ ph: 'ci', t: 'Job 02 · SonarQube analysis aur result', n: ['ci', 'ng', 'c_sonar', 'c_pg'], dur: 11000,
+  b: ['SonarQube code scan karta hai: **bugs, vulnerabilities, code smells, duplicate code**.',
+      'Analysis ka data **sonar-postgres** (internal DB) me save hota hai. Isiliye SonarQube ke saath ek Postgres container chalta hai.',
+      'Result wapas CI ko jaata hai aur SonarQube dashboard (`/sonar`) par bhi dikhta hai. Scan fail hone par job ❌.'],
+  chip: ['🔀 PR #42 · feature/login → main', 'code'],
+  flows: [F('sonar_pg', 'sonar', '', 300, 1300), F('ng_c_sonar', 'ok', '', 2200, 1000, { rev: true }), F('ci_ng', 'ok', 'result ✓', 3300, 3000, { rev: true, pos: [640, 470] })],
+  fx: [RP(100, 'c_sonar', 'sonar', 2), BG(1700, 'c_pg', 'saved', 'ok'), BG(6500, 'ci', '✓ scan done', 'ok')],
+  ck: [CKE('ci', 5, 'done', 6300)] },
+
+{ ph: 'ci', t: 'Job 03 · Trivy security scan', n: ['ci'], dur: 10000,
+  b: ['**Trivy** poore project folder (filesystem) ko scan karta hai: dependencies me **known vulnerabilities (CVE)**, leaked secrets aur config mistakes.',
+      'Sirf **HIGH** aur **CRITICAL** severity dekhi jaati hai. `ignore-unfixed: true` ka matlab: jiska abhi fix release hi nahi hua use ignore karo.',
+      '`exit-code: 1`: agar koi HIGH / CRITICAL mila to **CI fail** ho jaati hai. Ye scan runner par hi hota hai, server tak nahi jaata.'],
+  chip: ['🔀 PR #42 · feature/login → main', 'code'],
+  fx: [RP(200, 'ci', 'ci', 5), BG(1800, 'ci', 'HIGH + CRITICAL only', 'ci')],
+  ck: [CKE('ci', 6, 'run', 0), CKE('ci', 6, 'done', 7000)] },
+
+{ ph: 'ci', t: 'Job 04 · Teams notification (CI ✅)', n: ['ci', 'teams'], dur: 12000,
+  b: ['Last job `notify` **hamesha chalta hai** (`if: always()`), chahe CI pass ho ya fail.',
+      'Ye Build, Sonar, Trivy teeno ka result dekhta hai: sab success → **✅ PASSED**, warna **❌ FAILED**.',
+      'Phir `curl` se Teams ke webhook par ek **Adaptive Card** POST karta hai: repo, branch, actor, run number, commit SHA, har stage ka result, aur "View Run / PR / Commit" buttons.',
+      'Team ko turant **Teams app me alert** mil jaata hai. GitHub kholne ki zaroorat nahi.'],
+  chip: ['🔀 PR #42 · feature/login → main', 'code'],
+  flows: [F('ci_teams', 'ci', 'webhook POST (CI)', 400, 2300, { pos: [1110, 104] })],
+  fx: [TM(2900, 'ci-pass'), RP(2900, 'teams', 'sonar', 3)],
+  ck: [CKE('ci', 7, 'run', 0), CKE('ci', 7, 'done', 3600)] },
+
+{ ph: 'ci', t: 'Agar CI fail ho jaye to?', n: ['ci', 'teams', 'dev', 'repo'], dur: 14000,
+  b: ['Maan lo Trivy ko CRITICAL vulnerability mili. Trivy job ❌ hota hai aur notify job **❌ FAILED** card Teams me bhej deta hai.',
+      'PR par red ❌ dikhta hai. Developer ko merge nahi karna chahiye (GitHub **branch protection** se merge block bhi kar sakte ho).',
+      'Developer feature branch me fix push karta hai, aur **CI apne aap dobara chalti hai** (purani run cancel). Jab tak sab ✅ nahi hota, main me code nahi jaata.'],
+  chip: ['🔀 PR #42 · CI ❌ fix pending', 'bad'],
+  flows: [F('ci_teams', 'bad', 'webhook POST (CI)', 400, 2300, { pos: [1110, 104] }), F('dev_repo', 'code', 'fix push', 8000, 1500, { pos: [265, 146] })],
+  fx: [BG(700, 'ci', '❌ Trivy failed', 'bad'), TM(2900, 'ci-fail'), RP(2900, 'teams', 'bad', 3)],
+  ck: [CKE('ci', 6, 'fail', 500)] },
+
+{ ph: 'mg', t: 'CI pass hui: PR main me merge hota hai', n: ['dev', 'repo'], dur: 9500,
+  b: ['Jab CI ✅ aur review OK ho, developer (ya reviewer) Pull Request ko **Merge** karta hai.',
+      'Ab feature branch ka code **main** me aa jaata hai. main wahi branch hai jo UAT par deploy hoti hai.',
+      'Ye merge main par ek naya push / commit banata hai. **Yehi CD ka trigger hai.**'],
+  facts: [['Merge into', 'main'], ['Triggers', 'CD (push to main)'], ['Rule', 'CI green ✅ hone ke baad hi merge']],
+  chip: ['✅ PR #42 merged into main', 'ok'],
+  flows: [F('dev_repo', 'ok', 'Merge PR', 500, 1500, { pos: [265, 146] })],
+  fx: [BG(2200, 'repo', 'merged ✓', 'ok'), RP(2200, 'repo', 'ok', 3)],
+  ck: [CKE('ci', 'all', 'done', 0)] },
+
+{ ph: 'cd', t: 'CD trigger hoti hai: push to main', n: ['repo', 'cd'], dur: 10500,
+  b: ['Workflow `cd` ka trigger hai: `on: push` → `branches: main`.',
+      '**Concurrency group** `backend-deploy` aur `cancel-in-progress: false`. Do merges ek saath aaye to deployments line me lagengi, beech me kisi deploy ko cancel nahi karenge (half deploy se bachne ke liye).',
+      'Pehle `build-image` job chalega, aur sirf uske pass hone par `deploy` job chalega (`needs`).'],
+  chip: ['🌳 main updated · CD running', 'cd'],
+  flows: [F('repo_cd', 'cd', 'push event (main)', 400, 1800, { pos: [580, 244] })],
+  fx: [RP(2300, 'cd', 'cd', 3)],
+  ck: [CKE('cd', 'all', 'pend', 0)] },
+
+{ ph: 'cd', t: 'CD Job 01 · Docker image build aur push', n: ['cd', 'ghcr'], dur: 11500,
+  b: ['**Checkout** code, phir **GHCR** (GitHub Container Registry) me login, `GHCR_USERNAME` / `GHCR_TOKEN` secrets se.',
+      'Metadata action 2 tags banata hai: **`latest`** (server yehi pull karega) aur **`sha-xxxxxxx`** (har commit ka unique tag, rollback ke kaam aata hai).',
+      '`Dockerfile` se image build hoti hai aur `ghcr.io/plumedica-healthcare-india/plumedica-backend` par push ho jaati hai. Timeout 30 minute.'],
+  chip: ['🌳 main updated · CD running', 'cd'],
+  flows: [F('cd_ghcr', 'cd', 'push image', 4300, 1900, { pos: [974, 244] })],
+  fx: [RP(100, 'cd', 'cd', 4), RP(6400, 'ghcr', 'cd', 2), BG(6500, 'ghcr', 'latest + sha ✓', 'ok')],
+  ck: [CKE('cd', 0, 'run', 0), CKE('cd', 0, 'done', 1200), CKE('cd', 1, 'run', 1200), CKE('cd', 1, 'done', 2400), CKE('cd', 2, 'run', 2400), CKE('cd', 2, 'done', 3600), CKE('cd', 3, 'run', 3600), CKE('cd', 3, 'done', 6300)] },
+
+{ ph: 'cd', t: 'CD Job 02 · SSH se UAT server me entry', n: ['cd', 'eng'], dur: 10500,
+  b: ['Ab `deploy` job **appleboy/ssh-action** se server par SSH karta hai. Host = Static Public IP, user aur private key GitHub Secrets me stored hain.',
+      'Server par **sshd** connection accept karta hai. `script_stop: true` ka matlab: koi bhi command fail hui to script wahin ruk jaati hai.',
+      'Neeche ki saari steps **server ke andar** chalti hain, aur unke logs GitHub Actions me live dikhte hain.'],
+  chip: ['🌳 main updated · CD running', 'cd'],
+  flows: [F('cd_ssh', 'cd', 'SSH (static IP)', 500, 3100, { pos: [350, 440] })],
+  fx: [RP(3700, 'eng', 'cd', 3), BG(3900, 'eng', 'sshd ✓ connected', 'ok')],
+  ck: [CKE('cd', 4, 'run', 300), CKE('cd', 4, 'done', 3800)] },
+
+{ ph: 'cd', t: 'Server par: GHCR login aur naya image pull', n: ['ghcr', 'eng', 'disk'], dur: 10500,
+  b: ['**STEP 1:** server se `docker login ghcr.io` (token stdin se, taaki password shell history me na aaye).',
+      '**STEP 2:** `docker pull …/plumedica-backend:latest`. Naya image GHCR se server par download hota hai aur **Managed Data Disk** par store hota hai.',
+      'Abhi tak **purana container chal raha hai**, users ko kuch pata nahi chala.'],
+  chip: ['🌳 main updated · CD running', 'cd'],
+  flows: [F('ghcr_pull', 'cd', 'docker pull', 500, 3300, { pos: [520, 440] })],
+  fx: [RP(4000, 'disk', 'ok', 3), BG(4200, 'disk', 'image stored ✓', 'ok')],
+  ck: [CKE('cd', 5, 'run', 300), CKE('cd', 5, 'done', 5600)] },
+
+{ ph: 'cd', t: 'Purana container hatao, naya chalao', n: ['eng', 'c_be'], dur: 12500,
+  b: ['**STEP 3 / 4:** `docker stop` + `docker rm` plumedica-backend (`|| true`, pehli baar ho to bhi error nahi).',
+      '**STEP 5:** `docker run`: naya container, network **`plumedica_network`** (taaki nginx naam se dhoondh sake), `--restart unless-stopped` (server reboot par auto-start) aur `--env-file /opt/plumedica/backend/.env` (secrets server par, Git me kabhi nahi).',
+      'Stop aur start ke beech kuch seconds ka **downtime** hota hai. UAT ke liye theek hai.'],
+  chip: ['🌳 main updated · CD running', 'cd'],
+  flows: [F('eng_be', 'bad', 'docker stop + rm', 300, 1700, { pos: [700, 514] }), F('eng_be', 'cd', 'docker run', 3800, 1900, { pos: [700, 514] })],
+  fx: [BG(2100, 'c_be', '⏹ old stopped', 'bad'), BG(5900, 'c_be', '▶ new started', 'ok'), RP(5900, 'c_be', 'ok', 3)],
+  ck: [CKE('cd', 6, 'run', 300), CKE('cd', 6, 'done', 2600), CKE('cd', 7, 'run', 3600), CKE('cd', 7, 'done', 6800)] },
+
+{ ph: 'cd', t: 'Health check: 8 baar tak retry', n: ['eng', 'ng', 'c_be'], dur: 12000,
+  b: ['**STEP 6:** 10 second wait, phir `docker ps` se confirm ki container **Up** hai.',
+      '**STEP 7:** `docker exec nginx wget http://plumedica-backend:5000`. NGINX container ke andar se backend ko call hota hai (docker network ke naam se). Real traffic ka raasta bhi yehi hai.',
+      'Maximum **8 koshish**, har 5 second baad. Pass → aage. Sab fail → last 50 log lines print karke `exit 1`, aur deployment ❌.'],
+  chip: ['🌳 main updated · CD running', 'cd'],
+  flows: [F('eng_ng', 'cd', 'docker exec', 300, 1500, { pos: [535, 566] }), F('ng_c_be', 'cd', '', 1800, 1200), F('ng_c_be', 'ok', '', 3300, 1200, { rev: true }), F('eng_ng', 'ok', '', 4700, 1500, { rev: true })],
+  fx: [BG(4600, 'c_be', '✓ healthy', 'ok')],
+  ck: [CKE('cd', 8, 'run', 300), CKE('cd', 8, 'done', 6400)] },
+
+{ ph: 'cd', t: 'Backend MongoDB Atlas se connect hota hai', n: ['c_be', 'atlas'], dur: 11500,
+  b: ['Container start hote hi backend `.env` ki connection string se **MongoDB Atlas** (cloud) se **TLS** ke through connect hota hai.',
+      'Database server par nahi, **Atlas me managed** hai: backup, scaling, patching Atlas sambhalta hai. VM par sirf app chalti hai.',
+      'Ye **outbound** connection hai (VM → Atlas). Isliye Atlas ki Network Access list me VM ka **Static IP** allow hona zaroori hai.'],
+  facts: [['Database', 'MongoDB Atlas (managed)'], ['Connection', 'outbound TLS from backend'], ['Config', '.env file (server par, Git me nahi)']],
+  chip: ['🌳 main updated · CD running', 'cd'],
+  flows: [F('be_atlas', 'ok', 'TLS · outbound', 400, 2300, { pos: [1270, 686] }), F('be_atlas', 'vpn', '', 3400, 2300, { rev: true })],
+  fx: [RP(2700, 'atlas', 'ok', 3), BG(2900, 'atlas', 'connected ✓', 'ok')] },
+
+{ ph: 'cd', t: 'CD Job 03 · Teams notification (Deploy ✅)', n: ['cd', 'teams'], dur: 12000,
+  b: ['`notify` job `if: !cancelled()` ke saath chalta hai. `build-image` aur `deploy` dono success → **✅ DEPLOYMENT SUCCESSFUL**, warna **❌ DEPLOYMENT FAILED**.',
+      'Adaptive Card me repo, branch (main), actor, run number, commit SHA, **Docker Build Stage / Deploy Stage** ka result, aur "View Workflow Run / View Commit" buttons.',
+      'Ab team ko pata chal gaya: **naya backend UAT par live hai** 🎉'],
+  chip: ['🌳 main updated · CD running', 'cd'],
+  flows: [F('cd_teams', 'cd', 'webhook POST (CD)', 400, 2500, { pos: [1110, 190] })],
+  fx: [TM(3000, 'cd-pass'), RP(3000, 'teams', 'ok', 3)],
+  ck: [CKE('cd', 9, 'run', 0), CKE('cd', 9, 'done', 3700)] },
+
+{ ph: 'rt', t: 'Developer UAT kaise access karta hai: WireGuard VPN', n: ['dev', 'wg'], dur: 11000,
+  b: ['Har developer ke laptop me **WireGuard client** hai. Server ne har ek ko apna VPN IP (`10.10.10.x`) diya hua hai.',
+      'Developer VPN **ON** karta hai to laptop se Azure VM ke WireGuard tak **encrypted tunnel** ban jaata hai, aur use `10.10.10.x` IP milti hai.',
+      'Yehi IP range NGINX me allowed hai. **VPN ke bina koi UAT app / API / admin dekh hi nahi sakta.**'],
+  facts: [['VPN range', '10.10.10.0/24'], ['Kaun', 'sirf registered developers'], ['IP', 'server har developer ko deta hai']],
+  flows: [F('dev_wg', 'vpn', 'VPN tunnel', 500, 3300, { pos: [140, 480] })],
+  fx: [RP(3700, 'wg', 'vpn', 3), BG(3900, 'wg', 'IP 10.10.10.x ✓', 'vpn')] },
+
+{ ph: 'rt', t: 'NGINX: HTTPS aur IP check', n: ['wg', 'ng'], dur: 12000,
+  b: ['Request `https://uat.plumedica.com` par aati hai. Port **80** par aayi to automatic **301 redirect → HTTPS**.',
+      'NGINX **TLS 1.2 / 1.3** aur **HTTP/2** ke saath SSL terminate karta hai (Let\'s Encrypt certificate).',
+      'Phir check: source IP `10.10.10.0/24` me hai? **Haan** → aage jaao. **Nahi** → `deny all`.'],
+  facts: [['Port 80', '→ 301 → 443'], ['TLS', '1.2 / 1.3 + HTTP/2'], ['Rule', 'allow 10.10.10.0/24; deny all'], ['Max upload', '100 MB']],
+  flows: [F('wg_ng', 'vpn', '', 500, 1300)],
+  fx: [BG(200, 'ng', '80 → 301 → 443', 'ok', { until: 3800 }), BG(3900, 'ng', '🔒 TLS 1.3 · HTTP/2', 'ok', { until: 7000 }), BG(7100, 'ng', '✓ IP in 10.10.10.0/24', 'ok'), RP(7100, 'ng', 'ok', 3)] },
+
+{ ph: 'rt', t: 'NGINX path dekhkar sahi container ko bhejta hai', n: ['ng', 'c_site', 'c_web', 'c_admin', 'c_be', 'c_dozzle'], dur: 13000,
+  b: ['`/` → website · `/web/` → Flutter web app · `/admin/` → Admin Panel · `/api` → Backend · `/logs/` → Dozzle.',
+      'Saare containers ek hi docker network (`plumedica_network`) me hain, isliye NGINX unhe **naam se** bula leta hai (`plumedica-backend:5000`). Bahar koi container port open nahi.',
+      '`Host`, `X-Real-IP`, `X-Forwarded-For` headers saath jaate hain, taaki app asli client IP jaan sake. API ke liye timeout 300s hai.',
+      '**Dozzle** (`/logs/`) se developers browser me live container logs dekh sakte hain.'],
+  facts: [['/', 'website :80'], ['/web/', 'Flutter web :80'], ['/admin/', 'Admin Panel :80'], ['/api', 'Backend :5000'], ['/logs/', 'Dozzle :8080'], ['/sonar/', 'SonarQube :9000 (open)']],
+  flows: [F('ng_c_site', 'app', '', 400, 1500), F('ng_c_web', 'app', '', 1000, 1500), F('ng_c_admin', 'app', '', 1600, 1500), F('ng_c_be', 'be', '', 2200, 1500), F('ng_c_dozzle', 'vpn', '', 2800, 1500)],
+  fx: [RP(200, 'ng', 'ok', 4)] },
+
+{ ph: 'rt', t: 'API call: Backend → MongoDB Atlas → Response', n: ['dev', 'wg', 'ng', 'c_be', 'atlas'], dur: 14000,
+  b: ['Example: developer ka browser `/api/...` call karta hai. Request **VPN tunnel → NGINX → plumedica-backend:5000** pahunchti hai.',
+      'Backend business logic chalata hai aur **MongoDB Atlas** se data padhta / likhta hai (TLS).',
+      'Response wapas usi raaste se aata hai: **backend → NGINX → WireGuard tunnel → developer ka browser** 🙂'],
+  facts: [['Raasta', 'Dev → VPN → NGINX → Backend → Atlas'], ['API timeout', '300 seconds'], ['Response', 'wahi raasta, ulta']],
+  flows: [F('dev_wg', 'vpn', 'request', 200, 1700, { pos: [140, 480] }), F('wg_ng', 'vpn', '', 1900, 700), F('ng_c_be', 'be', 'GET /api/…', 2600, 1100, { pos: [770, 640] }),
+          F('be_atlas', 'be', 'query', 3800, 1700, { pos: [1270, 686] }), F('be_atlas', 'ok', '', 5600, 1700, { rev: true }),
+          F('ng_c_be', 'ok', '', 7500, 1100, { rev: true }), F('wg_ng', 'ok', '', 8700, 700, { rev: true }), F('dev_wg', 'ok', 'response', 9500, 1800, { rev: true, pos: [140, 480] })],
+  fx: [] },
+
+{ ph: 'rt', t: 'VPN ke bina aaya to? Blocked 🚫', n: ['inet', 'ng', 'c_sonar'], dur: 13500,
+  b: ['Public Internet se koi (bot / hacker / unknown IP) `uat.plumedica.com` kholta hai. NGINX ke **IP check me fail** ho jaata hai.',
+      '`deny all` normally 403 deta hai, par config 403 ko **444** me badal deti hai (`error_page 403 = @drop`). NGINX connection **chup-chaap band** kar deta hai, koi page ya error dikhta hi nahi.',
+      'Isse scanners ko ye bhi pata nahi chalta ki yahan kya chal raha hai.',
+      'Sirf **`/sonar/`** ka exception hai (GitHub CI ke liye). Wahan Sonar ka apna login / token lagta hai.'],
+  facts: [['Rule', 'deny all → 403'], ['error_page', '403 = @drop → 444 (silent close)'], ['Exception', '/sonar/ → allow all']],
+  flows: [F('inet_ng', 'bad', 'no VPN IP', 400, 2200, { pos: [340, 757], until: 6200 }), F('inet_ng', 'code', 'GET /sonar/', 6500, 2000, { pos: [340, 757] }), F('ng_c_sonar', 'code', '', 8600, 1000)],
+  fx: [{ k: 'x', at: 2600, until: 6200 }, BG(2700, 'ng', '403 → 444 DROP', 'bad', { until: 6200 }), BG(8700, 'ng', '/sonar → allowed', 'code'), RP(9700, 'c_sonar', 'sonar', 3)] },
+
+{ ph: 'rt', t: "SSL certificate: Let's Encrypt auto-renew", n: ['le', 'ng'], dur: 11500,
+  b: ["Certificate **Let's Encrypt** se free milta hai, **90 din** valid rehta hai, aur auto-renew set hai.",
+      "Renew ke time Let's Encrypt port **80** par `/.well-known/acme-challenge/` check karta hai. Isi liye ye ek path HTTP par open hai, baaki sab 443 par redirect hota hai.",
+      'Certificate files `/etc/letsencrypt/live/uat.plumedica.com/` me rehti hain (`fullchain.pem` + `privkey.pem`), aur NGINX unhe use karta hai.'],
+  facts: [['Issuer', "Let's Encrypt (free)"], ['Validity', '90 din · auto-renew'], ['Challenge', '/.well-known/acme-challenge/ (port 80)'], ['Files', 'fullchain.pem · privkey.pem']],
+  flows: [F('le_ng', 'code', 'ACME challenge · :80', 500, 2600, { pos: [560, 860] })],
+  fx: [RP(3200, 'ng', 'ok', 3), BG(3400, 'ng', '🔒 cert renewed', 'ok')] },
+
+{ ph: 'rc', t: 'Poora cycle ek line me', n: 'all', dur: 15500,
+  b: ['**Code push → PR → CI** (Lint · Build · Sonar · Trivy) **→ Teams alert → Merge → CD** (Docker build · GHCR · SSH deploy · health check) **→ Teams alert → UAT live.**',
+      'Access: sirf **WireGuard VPN** se, NGINX gate par IP check, HTTPS Let\'s Encrypt se, aur database Atlas me.',
+      'Ab agla developer naya feature branch banata hai aur cycle phir shuru ↻'],
+  facts: [['CI', 'Lint · Build · Sonar · Trivy'], ['CD', 'Docker build · GHCR · SSH · health check'], ['Alerts', 'Microsoft Teams (CI + CD)'], ['Access', 'WireGuard VPN + NGINX allow-list']],
+  flows: [F('dev_repo', 'code', '', 200, 900), F('repo_ci', 'ci', '', 1100, 900), F('ci_teams', 'ci', '', 2000, 1100), F('repo_cd', 'cd', '', 3300, 900), F('cd_ghcr', 'cd', '', 4200, 800),
+          F('cd_ssh', 'cd', '', 5000, 1400), F('ghcr_pull', 'cd', '', 5000, 1400), F('cd_teams', 'cd', '', 6600, 1100),
+          F('dev_wg', 'vpn', '', 8000, 1400), F('wg_ng', 'vpn', '', 9400, 500),
+          F('ng_c_site', 'app', '', 9900, 1000), F('ng_c_web', 'app', '', 9900, 1000), F('ng_c_admin', 'app', '', 9900, 1000), F('ng_c_be', 'be', '', 9900, 1000), F('be_atlas', 'ok', '', 10900, 1300)],
+  fx: [] }
+];
+
+/* ---------- engine ---------- */
+const svg = $('#svg');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let cur = -1, T = 0, playing = !reduce, auto = !reduce, speed = 1, last = performance.now();
+let flows = [], pendingFx = [], pendingCk = [], live = [], badgeBy = {};
+const ease = p => -(Math.cos(Math.PI * p) - 1) / 2;
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const fmt = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+
+function mkFlow(s) {
+  let pts = E[s.e].map(p => p.slice()); if (s.rev) pts.reverse();
+  const g = el('g', { class: 'flow k-' + s.c }, gF);
+  const line = el('path', { class: 'fl', d: rp(pts) }, g);
+  const len = line.getTotalLength();
+  line.style.strokeDasharray = `0 ${len + 30}`;
+  const halo = el('circle', { class: 'ph', r: 15 }, g), pk = el('circle', { class: 'pk', r: 7 }, g);
+  const [px, py] = pts[pts.length - 1], [qx, qy] = pts[pts.length - 2];
+  const ar = el('path', { class: 'ar', d: 'M0 0 L-14 -8 L-14 8 Z', transform: `translate(${px},${py}) rotate(${Math.atan2(py - qy, px - qx) * 180 / Math.PI})` }, g);
+  ar.style.opacity = 0;
+  let lb = null;
+  if (s.l) {
+    lb = el('g', { class: 'lb k-' + s.c }, gL);
+    const r = el('rect', { rx: 11, height: 22 }, lb), t = txt(lb, '', 0, 15, s.l);
+    const bw = t.getBBox().width + 18; r.setAttribute('width', bw); r.setAttribute('x', -bw / 2); r.setAttribute('y', 0);
+    const mid = line.getPointAtLength(len / 2), p = s.pos || [mid.x, mid.y - 22];
+    lb.setAttribute('transform', `translate(${p[0]},${p[1] - 11})`);
+  }
+  g.style.opacity = 0;
+  return { ...s, g, line, len, halo, pk, ar, lb, loop: Math.max(1500, len * 3.2) };
+}
+function updFlow(f) {
+  const loc = T - f.at, vis = loc >= 0 && !(f.until != null && T >= f.until);
+  f.g.style.opacity = vis ? 1 : 0;
+  if (f.lb) f.lb.classList.toggle('v', vis && loc > 120);
+  if (!vis) return;
+  const p = Math.min(1, loc / f.d), e = ease(p);
+  f.line.style.strokeDasharray = `${f.len * e} ${f.len + 30}`;
+  f.line.style.strokeOpacity = e < .004 ? 0 : 1;
+  const q = p < 1 ? e : ((loc - f.d) % f.loop) / f.loop;
+  const pt = f.line.getPointAtLength(f.len * q);
+  f.pk.setAttribute('cx', pt.x); f.pk.setAttribute('cy', pt.y); f.halo.setAttribute('cx', pt.x); f.halo.setAttribute('cy', pt.y);
+  f.pk.style.opacity = p < 1 ? 1 : .85; f.halo.style.opacity = p < 1 ? .28 : .15;
+  f.ar.style.opacity = p >= .985 ? 1 : 0;
+}
+
+function addLive(elm, o = {}) { const rec = { el: elm, ...o }; live.push(rec); return rec; }
+function fire(x) {
+  const n = N[x.n];
+  switch (x.k) {
+    case 'badge': {
+      if (badgeBy[x.n]) { badgeBy[x.n].el.remove(); live = live.filter(o => o !== badgeBy[x.n]); }
+      const wrap = el('g', {}, gX);
+      const g = el('g', { class: 'badge k-' + x.c }, wrap);
+      const r = el('rect', { rx: 11, height: 22 }, g), t = txt(g, '', 0, 15, x.t);
+      const w = t.getBBox().width + 18; r.setAttribute('width', w); r.setAttribute('x', -w / 2); t.setAttribute('x', 0);
+      const compact = n.h <= 44;
+      const bx = compact ? n.x + n.w - w / 2 - 8 : n.x + n.w - w / 2 - 10;
+      const by = compact ? n.y + (n.h - 22) / 2 : n.y - 11;
+      wrap.setAttribute('transform', `translate(${bx},${by})`);
+      badgeBy[x.n] = addLive(wrap, { until: x.until, node: x.n }); break;
+    }
+    case 'ripple': {
+      for (let i = 0; i < 3; i++) {
+        const r = el('rect', { class: 'rip k-' + x.c, x: n.x, y: n.y, width: n.w, height: n.h, rx: 14 }, gX);
+        r.style.setProperty('--sx', 1 + 30 / n.w); r.style.setProperty('--sy', 1 + 30 / n.h);
+        r.style.animationDelay = (i * .55) + 's'; r.style.animationIterationCount = x.rep || 3;
+        addLive(r);
+      }
+      break;
+    }
+    case 'x': {
+      const wrap = el('g', { transform: 'translate(495,757)' }, gX);
+      const g = el('g', { class: 'xmark' }, wrap);
+      el('circle', { r: 17 }, g); el('path', { d: 'M-6 -6 L6 6 M6 -6 L-6 6' }, g);
+      addLive(wrap, { until: x.until }); break;
+    }
+    case 'teams': setTeams(x.kind); break;
+    case 'zone': Z[x.z].classList.remove('zp'); void Z[x.z].getBoundingClientRect(); Z[x.z].classList.add('zp'); break;
+  }
+}
+function clearAll() {
+  flows.forEach(f => { f.g.remove(); if (f.lb) f.lb.remove(); }); flows = [];
+  live.forEach(o => o.el.remove()); live = []; badgeBy = {};
+  Object.values(Z).forEach(z => z.classList.remove('zp'));
+  TC.card.classList.remove('show'); TC.idle.classList.remove('hide');
+}
+function setChip(c) {
+  if (!c) { chip.classList.add('hide'); return; }
+  chipT.textContent = c[0]; chip.setAttribute('class', 'k-' + c[1]); chip.classList.remove('hide');
+}
+function renderCaption(st) {
+  const [name, col] = PH[st.ph];
+  $('#cap').style.setProperty('--pc', `var(${col})`);
+  $('#pill').textContent = name;
+  $('#title').textContent = st.t;
+  const ul = $('#bul'); ul.innerHTML = '';
+  st.b.forEach((s, i) => { const li = document.createElement('li'); li.innerHTML = fmt(s); li.style.animationDelay = (.15 + i * .45) + 's'; ul.appendChild(li); });
+  const isCi = st.ph === 'ci', isCd = st.ph === 'cd';
+  $('#cardCi').hidden = !isCi; $('#cardCd').hidden = !isCd;
+  const hasF = !isCi && !isCd && st.facts;
+  $('#cardFacts').hidden = !hasF;
+  if (hasF) { const dl = $('#facts'); dl.innerHTML = ''; st.facts.forEach(([k, v]) => { const d = document.createElement('div'); d.innerHTML = '<dt></dt><dd></dd>'; d.firstChild.textContent = k; d.lastChild.textContent = v; dl.appendChild(d); }); }
+  $('#cardFacts').style.setProperty('--k', `var(${col})`);
+}
+const segsEl = $('#segs');
+S.forEach((st, i) => {
+  const b = document.createElement('button'); b.className = 'seg'; b.setAttribute('aria-label', `Step ${i + 1}: ${st.t}`); b.title = `${i + 1}. ${st.t}`;
+  b.style.setProperty('--pc', `var(${PH[st.ph][1]})`); b.addEventListener('click', () => go(i)); segsEl.appendChild(b);
+});
+function renderProgress() {
+  [...segsEl.children].forEach((b, i) => { b.classList.toggle('past', i < cur); b.classList.toggle('cur', i === cur); });
+  $('#count').textContent = `Step ${cur + 1} / ${S.length}`;
+}
+function syncBtn() { $('#play').textContent = playing && (auto || T < S[cur].dur) ? '⏸ Pause' : (cur === S.length - 1 && T >= S[cur].dur ? '↻ Replay' : '▶ Play'); svg.classList.toggle('paused', !playing); }
+
+function enter(i) {
+  i = Math.max(0, Math.min(S.length - 1, i));
+  clearAll(); cur = i; T = 0; const st = S[i];
+  ckReset();
+  for (let k = 0; k < i; k++) [...(S[k].ck || [])].sort((a, b) => a.at - b.at).forEach(applyCk);
+  pendingCk = [...(st.ck || [])].sort((a, b) => a.at - b.at);
+  pendingFx = [...(st.fx || [])].sort((a, b) => a.at - b.at);
+  flows = (st.flows || []).map(mkFlow);
+  const all = st.n === 'all';
+  Object.keys(NODES).forEach(id => {
+    const on = !all && st.n.includes(id);
+    NODES[id].classList.toggle('on', on); NODES[id].classList.toggle('dim', !all && !on);
+  });
+  setChip(st.chip);
+  renderCaption(st); renderProgress(); update(); syncBtn();
+}
+function update() {
+  const st = S[cur];
+  while (pendingCk.length && pendingCk[0].at <= T) applyCk(pendingCk.shift());
+  while (pendingFx.length && pendingFx[0].at <= T) fire(pendingFx.shift());
+  live = live.filter(o => { if (o.until != null && T >= o.until) { o.el.remove(); if (o.node && badgeBy[o.node] === o) delete badgeBy[o.node]; return false; } return true; });
+  flows.forEach(updFlow);
+  const cs = segsEl.children[cur]; if (cs) cs.style.setProperty('--pf', Math.min(100, T / st.dur * 100) + '%');
+}
+function frame(now) {
+  const dt = Math.min(80, now - last); last = now;
+  if (playing) T += dt * speed;
+  update();
+  const st = S[cur];
+  if (playing && T >= st.dur) {
+    if (auto && cur < S.length - 1) enter(cur + 1);
+    else { T = st.dur; playing = false; syncBtn(); }
+  }
+  requestAnimationFrame(frame);
+}
+function go(i) { const was = playing || auto; const keepAuto = auto && playing; enter(i); playing = true; auto = keepAuto; if (!was) auto = false; syncBtn(); }
+$('#next').onclick = () => go(cur + 1);
+$('#prev').onclick = () => go(cur - 1);
+$('#restart').onclick = () => { enter(0); playing = true; auto = true; syncBtn(); };
+$('#play').onclick = togglePlay;
+function togglePlay() {
+  if (playing) { playing = false; syncBtn(); return; }
+  if (T >= S[cur].dur) { enter(cur < S.length - 1 ? cur + 1 : 0); }
+  playing = true; auto = true; syncBtn();
+}
+$('#speed').onchange = e => { speed = parseFloat(e.target.value); };
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT') return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  else if (e.code === 'ArrowRight') go(cur + 1);
+  else if (e.code === 'ArrowLeft') go(cur - 1);
+});
+$('#theme').onclick = () => {
+  const r = document.documentElement, dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  r.dataset.theme = dark ? 'light' : 'dark';
+};
+
+enter(0);
+requestAnimationFrame(t => { last = t; frame(t); });
+})();
+</script>
+</body>
+</html>
